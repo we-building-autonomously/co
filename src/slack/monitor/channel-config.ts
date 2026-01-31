@@ -98,7 +98,7 @@ export function resolveSlackChannelConfig(params: {
   });
   const { entry: matched, wildcardEntry: fallback } = match;
 
-  const requireMentionDefault = defaultRequireMention ?? true;
+  const requireMentionDefault = defaultRequireMention ?? false;
   if (keys.length === 0) {
     return { allowed: true, requireMention: requireMentionDefault };
   }

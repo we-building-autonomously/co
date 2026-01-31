@@ -12,12 +12,12 @@ describe("resolveSlackChannelConfig", () => {
     expect(res).toEqual({ allowed: true, requireMention: false });
   });
 
-  it("defaults defaultRequireMention to true when not provided", () => {
+  it("defaults defaultRequireMention to false when not provided", () => {
     const res = resolveSlackChannelConfig({
       channelId: "C1",
       channels: {},
     });
-    expect(res).toEqual({ allowed: true, requireMention: true });
+    expect(res).toEqual({ allowed: true, requireMention: false });
   });
 
   it("prefers explicit channel/fallback requireMention over defaultRequireMention", () => {
