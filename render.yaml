@@ -4,7 +4,7 @@ services:
     runtime: docker
     plan: standard
     healthCheckPath: /health
-    dockerCommand: node --max-old-space-size=768 dist/index.js gateway --port 8080 --bind lan --allow-unconfigured
+    dockerCommand: bash scripts/render-start.sh
     envVars:
       - key: PORT
         value: "8080"
