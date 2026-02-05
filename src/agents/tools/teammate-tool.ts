@@ -1,6 +1,5 @@
 import type { Tool } from "@anthropic-ai/sdk/resources/messages.mjs";
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { AnyAgentTool } from "./common.js";
 import { sendMessageSlack } from "../../slack/send.js";
@@ -25,46 +24,43 @@ Use this when you need to:
 - Find someone with specific expertise
 - Communicate with a teammate directly
 - Check teammate availability or contact info`,
-    input_schema: Type.Object({
-      action: Type.Unsafe<"list" | "get" | "message">({
-        type: "string",
-        enum: ["list", "get", "message"],
-        description:
-          "Action to perform: list (show all teammates), get (get info about specific teammate), message (send direct message)",
-      }),
-      teammate: Type.Optional(
-        Type.String({
+    input_schema: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: ["list", "get", "message"],
+          description:
+            "Action to perform: list (show all teammates), get (get info about specific teammate), message (send direct message)",
+        },
+        teammate: {
+          type: "string",
           description: "Teammate name or ID (required for 'get' and 'message' actions)",
-        }),
-      ),
-      message: Type.Optional(
-        Type.String({
+        },
+        message: {
+          type: "string",
           description: "Message content (required for 'message' action)",
-        }),
-      ),
-      type: Type.Optional(
-        Type.Unsafe<"human" | "agent" | "bot">({
+        },
+        type: {
           type: "string",
           enum: ["human", "agent", "bot"],
           description: "Filter by teammate type (for 'list' action)",
-        }),
-      ),
-      expertise: Type.Optional(
-        Type.String({
+        },
+        expertise: {
+          type: "string",
           description: "Filter by expertise area (for 'list' action)",
-        }),
-      ),
-      active: Type.Optional(
-        Type.Boolean({
+        },
+        active: {
+          type: "boolean",
           description: "Filter by active status (for 'list' action)",
-        }),
-      ),
-      preferredChannel: Type.Optional(
-        Type.String({
+        },
+        preferredChannel: {
+          type: "string",
           description: "Preferred communication channel (for 'message' action)",
-        }),
-      ),
-    }),
+        },
+      },
+      required: ["action"],
+    },
     async run(params: Record<string, unknown>): Promise<AgentToolResult<unknown>> {
       const action = params.action as string;
       const agentId = options?.agentSessionKey
