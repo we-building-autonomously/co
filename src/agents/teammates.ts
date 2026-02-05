@@ -228,11 +228,57 @@ export class TeammatesManager {
 }
 
 /**
- * Create teammates manager from config
+ * Create teammates manager from config with optional project scoping
  */
-export function createTeammatesManager(cfg: OpenClawConfig, agentId?: string): TeammatesManager {
+export function createTeammatesManager(
+  cfg: OpenClawConfig,
+  agentId?: string,
+  projectId?: string,
+): TeammatesManager {
   const agentConfig = cfg.agents?.list?.find((a) => a.id === agentId);
-  const teamConfig = agentConfig?.team ?? cfg.agents?.defaults?.team;
+  const globalTeamConfig = agentConfig?.team ?? cfg.agents?.defaults?.team;
 
-  return new TeammatesManager(teamConfig);
+  // If no project, use global team config
+  if (!projectId) {
+    return new TeammatesManager(globalTeamConfig);
+  }
+
+  // Find project config
+  const projectsConfig = agentConfig?.projects ?? cfg.agents?.defaults?.projects;
+  const project = projectsConfig?.list?.find((p) => p.id === projectId);
+
+  if (!project || !project.teammates) {
+    // No project teammates, use global
+    return new TeammatesManager(globalTeamConfig);
+  }
+
+  // Merge global and project teammates
+  // Project teammates take precedence for same IDs
+  const globalMembers = globalTeamConfig?.members ?? [];
+  const projectMembers = project.teammates ?? [];
+
+  // Build map with global members first, then override with project members
+  const mergedMembersMap = new Map<string, TeammateConfig>();
+  for (const member of globalMembers) {
+    mergedMembersMap.set(member.id, member);
+  }
+  for (const member of projectMembers) {
+    // Project member overrides or extends global member
+    const existing = mergedMembersMap.get(member.id);
+    if (existing) {
+      // Merge: project properties override global
+      mergedMembersMap.set(member.id, { ...existing, ...member });
+    } else {
+      // New project-specific teammate
+      mergedMembersMap.set(member.id, member);
+    }
+  }
+
+  const mergedConfig: TeamConfig = {
+    members: Array.from(mergedMembersMap.values()),
+    autoDiscover: globalTeamConfig?.autoDiscover,
+    discoverFrom: globalTeamConfig?.discoverFrom,
+  };
+
+  return new TeammatesManager(mergedConfig);
 }

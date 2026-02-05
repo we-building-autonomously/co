@@ -181,6 +181,44 @@ export type TeamConfig = {
   discoverFrom?: string[];
 };
 
+export type ProjectConfig = {
+  /** Unique project identifier. */
+  id: string;
+  /** Display name. */
+  name: string;
+  /** Optional description. */
+  description?: string;
+  /** Absolute path to project memory directory. */
+  memoryPath?: string;
+  /** Git sync configuration for project memory. */
+  memorySync?: GitSyncConfig;
+  /** Project-specific teammates. */
+  teammates?: TeammateConfig[];
+  /** Slack channel IDs associated with this project. */
+  slackChannels?: string[];
+  /** GitHub repository identifiers (org/repo format). */
+  githubRepos?: string[];
+  /** Local workspace path for this project. */
+  workspacePath?: string;
+  /** Whether project is active. */
+  active?: boolean;
+  /** Project creation timestamp. */
+  created?: number;
+  /** Last activity timestamp. */
+  lastActive?: number;
+  /** Additional metadata. */
+  metadata?: Record<string, unknown>;
+};
+
+export type ProjectsConfig = {
+  /** Currently active project ID. */
+  current?: string;
+  /** List of configured projects. */
+  list?: ProjectConfig[];
+  /** Auto-detect project from context (workspace, Slack, GitHub). */
+  autoDetect?: boolean;
+};
+
 export type AgentDefaultsConfig = {
   /** Primary model and fallbacks (provider/model). */
   model?: AgentModelListConfig;
@@ -231,6 +269,8 @@ export type AgentDefaultsConfig = {
   memorySearch?: MemorySearchConfig;
   /** Team configuration (teammates and collaboration). */
   team?: TeamConfig;
+  /** Projects configuration (project-based organization). */
+  projects?: ProjectsConfig;
   /** Default thinking level when no /think directive is present. */
   thinkingDefault?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   /** Default verbose level when no /verbose directive is present. */

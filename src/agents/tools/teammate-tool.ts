@@ -50,6 +50,7 @@ const TeammateToolSchema = Type.Object({
 export function createTeammateTool(options?: {
   agentSessionKey?: string;
   config?: OpenClawConfig;
+  projectId?: string;
 }): AnyAgentTool {
   return {
     label: "Team",
@@ -71,7 +72,7 @@ Use this when you need to:
       const agentId = options?.agentSessionKey
         ? resolveSessionAgentId(options.agentSessionKey)
         : "default";
-      const manager = createTeammatesManager(options?.config ?? {}, agentId);
+      const manager = createTeammatesManager(options?.config ?? {}, agentId, options?.projectId);
 
       try {
         switch (action) {
