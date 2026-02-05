@@ -235,7 +235,9 @@ Included files can themselves contain `$include` directives (up to 10 levels dee
       sandbox: { mode: "all", scope: "session" },
     },
     // Merge agent lists from all clients
-    list: { $include: ["./clients/mueller/agents.json5", "./clients/schmidt/agents.json5"] },
+    list: {
+      $include: ["./clients/mueller/agents.json5", "./clients/schmidt/agents.json5"],
+    },
   },
 
   // Merge broadcast configs
@@ -392,7 +394,11 @@ rotation order used for failover.
 {
   auth: {
     profiles: {
-      "anthropic:me@example.com": { provider: "anthropic", mode: "oauth", email: "me@example.com" },
+      "anthropic:me@example.com": {
+        provider: "anthropic",
+        mode: "oauth",
+        email: "me@example.com",
+      },
       "anthropic:work": { provider: "anthropic", mode: "api_key" },
     },
     order: {
@@ -642,8 +648,14 @@ Per-agent override (takes precedence when set, even `[]`):
 {
   agents: {
     list: [
-      { id: "work", groupChat: { mentionPatterns: ["@workbot", "\\+15555550123"] } },
-      { id: "personal", groupChat: { mentionPatterns: ["@homebot", "\\+15555550999"] } },
+      {
+        id: "work",
+        groupChat: { mentionPatterns: ["@workbot", "\\+15555550123"] },
+      },
+      {
+        id: "personal",
+        groupChat: { mentionPatterns: ["@homebot", "\\+15555550999"] },
+      },
     ],
   },
 }
@@ -1450,6 +1462,28 @@ working directory). The path must exist to be used.
 }
 ```
 
+### `agents.defaults.commitAuthor`
+
+Git commit author (name and email) used when the agent runs git commit (e.g. via
+`scripts/committer`). OpenClaw injects these as `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL`
+in the exec environment so commits have an author and pushes to GitHub succeed in
+headless/CI environments (e.g. Render, exe.dev).
+
+Set both `name` and `email`; if either is missing, no author env is set.
+
+```json5
+{
+  agents: {
+    defaults: {
+      commitAuthor: {
+        name: "OpenClaw Agent",
+        email: "agent@example.com",
+      },
+    },
+  },
+}
+```
+
 ### `agents.defaults.skipBootstrap`
 
 Disables automatic creation of the workspace bootstrap files (`AGENTS.md`, `SOUL.md`, `TOOLS.md`, `IDENTITY.md`, `USER.md`, and `BOOTSTRAP.md`).
@@ -1916,7 +1950,10 @@ Example (adaptive tuned):
         hardClearRatio: 0.5,
         minPrunableToolChars: 50000,
         softTrim: { maxChars: 4000, headChars: 1500, tailChars: 1500 },
-        hardClear: { enabled: true, placeholder: "[Old tool result content cleared]" },
+        hardClear: {
+          enabled: true,
+          placeholder: "[Old tool result content cleared]",
+        },
         // Optional: restrict pruning to specific tools (deny wins; supports "*" wildcards)
         tools: { deny: ["browser", "canvas"] },
       },
@@ -1979,7 +2016,9 @@ Block streaming:
   Example:
   ```json5
   {
-    agents: { defaults: { blockStreamingChunk: { minChars: 800, maxChars: 1200 } } },
+    agents: {
+      defaults: { blockStreamingChunk: { minChars: 800, maxChars: 1200 } },
+    },
   }
   ```
 - `agents.defaults.blockStreamingCoalesce`: merge streamed blocks before sending.
@@ -2114,7 +2153,11 @@ Example:
         },
         models: [
           { provider: "openai", model: "gpt-4o-mini-transcribe" },
-          { type: "cli", command: "whisper", args: ["--model", "base", "{{MediaPath}}"] },
+          {
+            type: "cli",
+            command: "whisper",
+            args: ["--model", "base", "{{MediaPath}}"],
+          },
         ],
       },
       video: {
@@ -2606,7 +2649,9 @@ Use Synthetic's Anthropic-compatible endpoint:
   agents: {
     defaults: {
       model: { primary: "synthetic/hf:MiniMaxAI/MiniMax-M2.1" },
-      models: { "synthetic/hf:MiniMaxAI/MiniMax-M2.1": { alias: "MiniMax M2.1" } },
+      models: {
+        "synthetic/hf:MiniMaxAI/MiniMax-M2.1": { alias: "MiniMax M2.1" },
+      },
     },
   },
   models: {
