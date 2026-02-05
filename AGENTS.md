@@ -115,6 +115,83 @@
 - **Review mode (PR link only):** read `gh pr view/diff`; **do not** switch branches; **do not** change code.
 - **Landing mode:** create an integration branch from `main`, bring in PR commits (**prefer rebase** for linear history; **merge allowed** when complexity/conflicts make it safer), apply fixes, add changelog (+ thanks + PR #), run full gate **locally before committing** (`pnpm build && pnpm check && pnpm test`), commit, merge back to `main`, then `git switch main` (never stay on a topic branch after landing). Important: contributor needs to be in git graph after this!
 
+### GitHub PR Automation Tools (Agent-to-Agent Collaboration)
+
+Agents have access to GitHub PR tools for automated PR workflows:
+
+- **`github_create_pr`**: Create pull requests with all parameters (no interactive prompts)
+- **`github_get_pr`**: Fetch PR status, reviews, and mergeable state
+- **`github_review_pr`**: Approve, request changes, or comment on PRs
+- **`github_comment_pr`**: Add comments to PRs for feedback/status updates
+- **`github_merge_pr`**: Merge PRs with squash/merge/rebase strategies
+
+**Configuration:** Add to `~/.openclaw/config.json`:
+
+```json
+{
+  "github": {
+    "baseBranch": "main",
+    "mergeStrategy": "squash",
+    "autoDeleteBranch": true
+  }
+}
+```
+
+**Example workflow (Agent A creates PR, Agent B reviews):**
+
+```typescript
+// Agent A: Create PR
+github_create_pr({
+  title: "feat: add feature",
+  body: "## Summary\n...",
+  head: "feature-branch",
+  base: "main"
+});
+
+// Agent B: Review and approve
+github_get_pr({ prNumber: 42 });
+// Run tests in temp workspace...
+github_review_pr({
+  prNumber: 42,
+  action: "approve",
+  body: "✅ APPROVED\n\n**Checks:** All tests pass"
+});
+github_merge_pr({ prNumber: 42, strategy: "squash" });
+```
+
+**See:** `docs/github-workflows.md` for complete documentation and examples.
+
+## Git & Commit Best Practices
+
+- **Commit author required:** GitHub rejects pushes when the commit has no author. In headless/CI environments (e.g. Render, exe.dev, GitHub Actions), set `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL` (e.g. `export GIT_AUTHOR_NAME="Bot" GIT_AUTHOR_EMAIL="bot@example.com"`) or run `git config user.name` and `git config user.email` in the repo before committing. The committer script fails with a clear message if author is missing.
+- **Docker build caching:** When reverting commits that add/remove files, Docker may cache old layers. Always rebuild with `--no-cache` flag after git resets: `docker build --no-cache -t image-name .` or clear Docker build cache: `docker builder prune -af`
+- **Force push safety:** When force pushing to remove bad commits, always verify local state first with `git log --oneline -5` and `git status`, then use `git push origin branch-name --force`
+
+## Multi-Agent Collaboration Guidelines
+
+When multiple agents are working on the same repository:
+
+### Git Safety Rules
+
+- **Do NOT** create/apply/drop `git stash` entries unless explicitly requested (this includes `git pull --rebase --autostash`)
+- **Do NOT** create/remove/modify `git worktree` checkouts (or edit `.worktrees/*`) unless explicitly requested
+- **Do NOT** switch branches or check out a different branch unless explicitly requested
+- Assume other agents may be working; keep unrelated WIP untouched and avoid cross-cutting state changes
+- When you see unrecognized files, keep going; focus on your changes and commit only those
+
+### Commit Scope Guidelines
+
+- When the user says **"push"**: you may `git pull --rebase` to integrate latest changes (never discard other agents' work)
+- When the user says **"commit"**: scope to your changes only
+- When the user says **"commit all"**: commit everything in grouped chunks
+
+### Coordination Best Practices
+
+- Running multiple agents is OK as long as each agent has its own session
+- Focus reports on your edits; avoid guard-rail disclaimers unless truly blocked
+- When multiple agents touch the same file, continue if safe; end with a brief "other files present" note only if relevant
+- Each agent should work independently and avoid interfering with other agents' work-in-progress
+
 ## Security & Configuration Tips
 
 - Web provider stores creds at `~/.openclaw/credentials/`; rerun `openclaw login` if logged out.
