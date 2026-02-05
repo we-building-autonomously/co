@@ -1,18 +1,58 @@
-import type { Tool } from "@anthropic-ai/sdk/resources/messages.mjs";
-import type { AgentToolResult } from "@mariozechner/pi-agent-core";
+import { Type } from "@sinclair/typebox";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { AnyAgentTool } from "./common.js";
 import { sendMessageSlack } from "../../slack/send.js";
 import { resolveSessionAgentId } from "../agent-scope.js";
 import { createTeammatesManager } from "../teammates.js";
+import { jsonResult } from "./common.js";
+
+const TeammateToolSchema = Type.Object({
+  action: Type.Unsafe<"list" | "get" | "message">({
+    type: "string",
+    enum: ["list", "get", "message"],
+    description:
+      "Action to perform: list (show all teammates), get (get info about specific teammate), message (send direct message)",
+  }),
+  teammate: Type.Optional(
+    Type.String({
+      description: "Teammate name or ID (required for 'get' and 'message' actions)",
+    }),
+  ),
+  message: Type.Optional(
+    Type.String({
+      description: "Message content (required for 'message' action)",
+    }),
+  ),
+  type: Type.Optional(
+    Type.Unsafe<"human" | "agent" | "bot">({
+      type: "string",
+      enum: ["human", "agent", "bot"],
+      description: "Filter by teammate type (for 'list' action)",
+    }),
+  ),
+  expertise: Type.Optional(
+    Type.String({
+      description: "Filter by expertise area (for 'list' action)",
+    }),
+  ),
+  active: Type.Optional(
+    Type.Boolean({
+      description: "Filter by active status (for 'list' action)",
+    }),
+  ),
+  preferredChannel: Type.Optional(
+    Type.String({
+      description: "Preferred communication channel (for 'message' action)",
+    }),
+  ),
+});
 
 export function createTeammateTool(options?: {
   agentSessionKey?: string;
   config?: OpenClawConfig;
 }): AnyAgentTool {
-  const tool: Tool & {
-    run: (params: Record<string, unknown>) => Promise<AgentToolResult<unknown>>;
-  } = {
+  return {
+    label: "Team",
     name: "teammates",
     description: `Manage and communicate with team members. This tool helps you:
 - List all team members and their expertise areas
@@ -24,44 +64,9 @@ Use this when you need to:
 - Find someone with specific expertise
 - Communicate with a teammate directly
 - Check teammate availability or contact info`,
-    input_schema: {
-      type: "object",
-      properties: {
-        action: {
-          type: "string",
-          enum: ["list", "get", "message"],
-          description:
-            "Action to perform: list (show all teammates), get (get info about specific teammate), message (send direct message)",
-        },
-        teammate: {
-          type: "string",
-          description: "Teammate name or ID (required for 'get' and 'message' actions)",
-        },
-        message: {
-          type: "string",
-          description: "Message content (required for 'message' action)",
-        },
-        type: {
-          type: "string",
-          enum: ["human", "agent", "bot"],
-          description: "Filter by teammate type (for 'list' action)",
-        },
-        expertise: {
-          type: "string",
-          description: "Filter by expertise area (for 'list' action)",
-        },
-        active: {
-          type: "boolean",
-          description: "Filter by active status (for 'list' action)",
-        },
-        preferredChannel: {
-          type: "string",
-          description: "Preferred communication channel (for 'message' action)",
-        },
-      },
-      required: ["action"],
-    },
-    async run(params: Record<string, unknown>): Promise<AgentToolResult<unknown>> {
+    parameters: TeammateToolSchema,
+    async execute(_toolCallId, args) {
+      const params = args as Record<string, unknown>;
       const action = params.action as string;
       const agentId = options?.agentSessionKey
         ? resolveSessionAgentId(options.agentSessionKey)
@@ -78,10 +83,10 @@ Use this when you need to:
             });
 
             if (teammates.length === 0) {
-              return {
+              return jsonResult({
                 ok: false,
-                result: "No teammates found matching criteria.",
-              };
+                error: "No teammates found matching criteria.",
+              });
             }
 
             const summary = teammates
@@ -97,26 +102,26 @@ Use this when you need to:
               })
               .join("\n\n");
 
-            return {
+            return jsonResult({
               ok: true,
               result: `Found ${teammates.length} teammate(s):\n\n${summary}`,
-            };
+            });
           }
 
           case "get": {
             if (!params.teammate) {
-              return {
+              return jsonResult({
                 ok: false,
-                result: "Error: 'teammate' parameter is required for 'get' action",
-              };
+                error: "'teammate' parameter is required for 'get' action",
+              });
             }
 
             const teammate = manager.getTeammate(params.teammate as string);
             if (!teammate) {
-              return {
+              return jsonResult({
                 ok: false,
-                result: `Teammate not found: ${params.teammate}`,
-              };
+                error: `Teammate not found: ${params.teammate}`,
+              });
             }
 
             const details = [
@@ -136,32 +141,32 @@ Use this when you need to:
               teammate.lastSeen ? `Last Seen: ${new Date(teammate.lastSeen).toISOString()}` : null,
             ].filter(Boolean);
 
-            return {
+            return jsonResult({
               ok: true,
               result: details.join("\n"),
-            };
+            });
           }
 
           case "message": {
             if (!params.teammate) {
-              return {
+              return jsonResult({
                 ok: false,
-                result: "Error: 'teammate' parameter is required for 'message' action",
-              };
+                error: "'teammate' parameter is required for 'message' action",
+              });
             }
             if (!params.message) {
-              return {
+              return jsonResult({
                 ok: false,
-                result: "Error: 'message' parameter is required for 'message' action",
-              };
+                error: "'message' parameter is required for 'message' action",
+              });
             }
 
             const teammate = manager.getTeammate(params.teammate as string);
             if (!teammate) {
-              return {
+              return jsonResult({
                 ok: false,
-                result: `Teammate not found: ${params.teammate}`,
-              };
+                error: `Teammate not found: ${params.teammate}`,
+              });
             }
 
             const message = params.message as string;
@@ -170,10 +175,10 @@ Use this when you need to:
             // Get contact info
             const contact = manager.getContact(teammate, preferredChannel);
             if (!contact) {
-              return {
+              return jsonResult({
                 ok: false,
-                result: `No contact method available for ${teammate.name}`,
-              };
+                error: `No contact method available for ${teammate.name}`,
+              });
             }
 
             // Send message based on contact type
@@ -182,33 +187,31 @@ Use this when you need to:
                 accountId: contact.accountId,
               });
 
-              return {
+              return jsonResult({
                 ok: true,
                 result: `Message sent to ${teammate.name} via Slack`,
-              };
+              });
             }
 
             // Add support for other channels here
-            return {
+            return jsonResult({
               ok: false,
-              result: `Contact type ${contact.type} not yet supported for direct messaging`,
-            };
+              error: `Contact type ${contact.type} not yet supported for direct messaging`,
+            });
           }
 
           default:
-            return {
+            return jsonResult({
               ok: false,
-              result: `Unknown action: ${action}`,
-            };
+              error: `Unknown action: ${action}`,
+            });
         }
       } catch (error) {
-        return {
+        return jsonResult({
           ok: false,
-          result: `Error: ${String(error)}`,
-        };
+          error: `Error: ${String(error)}`,
+        });
       }
     },
   };
-
-  return tool;
 }
