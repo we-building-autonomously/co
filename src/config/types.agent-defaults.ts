@@ -46,6 +46,50 @@ export type AgentContextPruningConfig = {
   };
 };
 
+export type GitSyncConflictStrategy =
+  | "local-wins"
+  | "remote-wins"
+  | "manual"
+  | "timestamp-wins"
+  | "merge-markers";
+
+export type GitSyncConfig = {
+  /** Enable git sync for agent memory. */
+  enabled?: boolean;
+  /** Git repository URL (SSH or HTTPS). */
+  repository: string;
+  /** Git branch to sync (default: "main"). */
+  branch?: string;
+  /** Sync interval (duration string, e.g., "5m"). */
+  interval?: string;
+  /** Sync on every heartbeat (default: true). */
+  onHeartbeat?: boolean;
+  /** Auto-commit changes (default: true). */
+  autoCommit?: boolean;
+  /** Auto-push commits to remote (default: true). */
+  autoPush?: boolean;
+  /** Auto-pull changes from remote (default: true). */
+  autoPull?: boolean;
+  /** Conflict resolution strategy (default: "local-wins"). */
+  conflictStrategy?: GitSyncConflictStrategy;
+  /** Glob patterns to sync (default: all files). */
+  paths?: string[];
+  /** Glob patterns to exclude from sync. */
+  excludePaths?: string[];
+  /** Commit message template (use {timestamp} placeholder). */
+  commitMessage?: string;
+  /** Git author information. */
+  author?: {
+    name?: string;
+    email?: string;
+  };
+  /** Optional pre/post-sync hooks. */
+  hooks?: {
+    preSync?: string;
+    postSync?: string;
+  };
+};
+
 export type CliBackendConfig = {
   /** CLI command to execute (absolute path or on PATH). */
   command: string;
@@ -91,6 +135,52 @@ export type CliBackendConfig = {
   serialize?: boolean;
 };
 
+export type TeammateType = "human" | "agent" | "bot";
+
+export type TeammateContact = {
+  /** Contact type (slack, discord, telegram, email, etc.). */
+  type: string;
+  /** Contact identifier (user ID, email, etc.). */
+  id: string;
+  /** Optional account ID for multi-account channels. */
+  accountId?: string;
+};
+
+export type TeammateConfig = {
+  /** Teammate identifier (unique name). */
+  id: string;
+  /** Display name. */
+  name: string;
+  /** Teammate type. */
+  type: TeammateType;
+  /** Role or job title. */
+  role?: string;
+  /** Expertise areas or capabilities. */
+  expertise?: string[];
+  /** Contact methods. */
+  contacts?: TeammateContact[];
+  /** Timezone (IANA timezone string). */
+  timezone?: string;
+  /** Working hours (for humans). */
+  workingHours?: {
+    start?: string; // HH:MM
+    end?: string; // HH:MM
+  };
+  /** Whether teammate is active/available. */
+  active?: boolean;
+  /** Additional metadata. */
+  metadata?: Record<string, unknown>;
+};
+
+export type TeamConfig = {
+  /** List of team members. */
+  members?: TeammateConfig[];
+  /** Auto-discover teammates from channels. */
+  autoDiscover?: boolean;
+  /** Channels to discover teammates from. */
+  discoverFrom?: string[];
+};
+
 export type AgentDefaultsConfig = {
   /** Primary model and fallbacks (provider/model). */
   model?: AgentModelListConfig;
@@ -130,8 +220,17 @@ export type AgentDefaultsConfig = {
   contextPruning?: AgentContextPruningConfig;
   /** Compaction tuning and pre-compaction memory flush behavior. */
   compaction?: AgentCompactionConfig;
-  /** Vector memory search configuration (per-agent overrides supported). */
+  /** Memory configuration (search and git sync). */
+  memory?: {
+    /** Vector memory search configuration (per-agent overrides supported). */
+    search?: MemorySearchConfig;
+    /** Git sync configuration for agent memory persistence. */
+    gitSync?: GitSyncConfig;
+  };
+  /** @deprecated Use memory.search instead. */
   memorySearch?: MemorySearchConfig;
+  /** Team configuration (teammates and collaboration). */
+  team?: TeamConfig;
   /** Default thinking level when no /think directive is present. */
   thinkingDefault?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
   /** Default verbose level when no /verbose directive is present. */

@@ -145,7 +145,7 @@ github_create_pr({
   title: "feat: add feature",
   body: "## Summary\n...",
   head: "feature-branch",
-  base: "main"
+  base: "main",
 });
 
 // Agent B: Review and approve
@@ -154,7 +154,7 @@ github_get_pr({ prNumber: 42 });
 github_review_pr({
   prNumber: 42,
   action: "approve",
-  body: "✅ APPROVED\n\n**Checks:** All tests pass"
+  body: "✅ APPROVED\n\n**Checks:** All tests pass",
 });
 github_merge_pr({ prNumber: 42, strategy: "squash" });
 ```
@@ -205,6 +205,142 @@ When multiple agents are working on the same repository:
 - Rebrand/migration issues or legacy config/service warnings: run `openclaw doctor` (see `docs/gateway/doctor.md`).
 
 ## Agent-Specific Notes
+
+### Team Awareness & Communication
+
+Agents can be aware of their teammates and communicate with them directly.
+
+#### Configuration
+
+Add to `~/.openclaw/config.json`:
+
+```json5
+{
+  agents: {
+    defaults: {
+      team: {
+        members: [
+          {
+            id: "alice",
+            name: "Alice Smith",
+            type: "human",
+            role: "Engineering Lead",
+            expertise: ["backend", "databases", "architecture"],
+            contacts: [
+              { type: "slack", id: "U123ALICE" },
+              { type: "email", id: "alice@company.com" },
+            ],
+            timezone: "America/New_York",
+            workingHours: { start: "09:00", end: "17:00" },
+            active: true,
+          },
+          {
+            id: "bob-agent",
+            name: "Bob Agent",
+            type: "agent",
+            role: "Code Review Agent",
+            expertise: ["code-review", "testing", "security"],
+            contacts: [{ type: "slack", id: "U456BOB" }],
+            active: true,
+          },
+        ],
+        autoDiscover: true,
+        discoverFrom: ["slack"],
+      },
+    },
+  },
+}
+```
+
+#### Using Teammate Tools
+
+**List all teammates:**
+
+```javascript
+teammates { action: "list" }
+// Returns: All team members with their roles and expertise
+```
+
+**Filter by expertise:**
+
+```javascript
+teammates { action: "list", expertise: "backend" }
+// Returns: Team members with backend expertise
+```
+
+**Get teammate details:**
+
+```javascript
+teammates { action: "get", teammate: "alice" }
+// Returns: Detailed info about Alice (contacts, timezone, hours, etc.)
+```
+
+**Send direct message:**
+
+```javascript
+teammates { action: "message", teammate: "alice", message: "Review needed on PR #123" }
+// Sends message to Alice via her preferred contact method (Slack)
+```
+
+#### Auto-Discovery
+
+When `autoDiscover: true`, agents automatically learn about teammates from:
+
+- **Slack workspace members**: When interacting in Slack channels
+- **Message senders**: People who message the agent directly
+- **Channel participants**: Active participants in monitored channels
+
+Discovered teammates are tracked with:
+
+- Name and user ID
+- Last seen timestamp
+- Discovery source (e.g., "slack")
+- Contact information
+
+#### Best Practices
+
+1. **Know your team**: Use `teammates list` to see who's available
+2. **Find expertise**: Filter by expertise area to find the right person
+3. **Direct communication**: Use `teammates message` for 1:1 communication
+4. **Respect availability**: Check timezone and working hours before messaging
+5. **Update after changes**: When team composition changes, update config
+
+### Slack Workspace Collaboration
+
+When operating in Slack workspaces, remember:
+
+- **Slack is a collaborative workspace**: Not just a command interface. Team members expect context-aware participation.
+- **Mentions vs Context**: While explicit mentions (`<@BOT_ID>`) always trigger responses, participate in conversations when contextually relevant if `requireMention: false` is configured for the channel.
+- **Bot Identity**: Your bot user ID is available in `ctx.botUserId`. Mentions look like `<@U123BOTID>` in message text.
+- **Team Awareness**: Track team members and their roles. Use `slack memberInfo` tool to learn about users. Recognize patterns in how different team members communicate.
+- **Channel Types**:
+  - DMs (`D` prefix): Always respond (unless pairing required)
+  - Public channels (`C` prefix): Respect `requireMention` setting
+  - Private channels (`G` prefix): Respect `requireMention` setting
+  - Multi-party DMs (`G` prefix, mpim type): Treated as group chat
+- **When to Respond**:
+  - Always: DMs, explicit mentions, threads you started, authorized control commands
+  - Context-dependent: Technical discussions in engineering channels (when `requireMention: false`)
+  - Never: Social coordination, already-handled issues (wait for explicit request)
+- **Configuration per Channel**: Use `channels.slack.channels.<id>` to set:
+  - `requireMention`: If `true`, only respond when tagged
+  - `users`: Optional user allowlist for channel
+  - `skills`: Optional skill filtering
+  - `systemPrompt`: Channel-specific behavior instructions
+- **Thread Behavior**: Configure with `replyToMode`:
+  - `off` (default): Reply in main channel unless message was in thread
+  - `first`: First reply creates thread, subsequent in main channel
+  - `all`: All replies stay in thread
+- **Best Practices**:
+  - Read channel history (`slack readMessages`) before responding to understand context
+  - Don't interrupt natural team conversations
+  - Add value - only respond when you contribute something meaningful
+  - Match channel tone (formal in formal channels, casual in casual channels)
+  - For high-traffic channels, configure `requireMention: true`
+  - For focused engineering channels, consider `requireMention: false` with appropriate skill/user filters
+- **Implementation**: See `src/slack/monitor/message-handler/prepare.ts` (mention detection at lines 209-225), `src/slack/monitor/channel-config.ts` (channel configuration resolution)
+
+**Docs**: See `docs/channels/slack.md` for full Slack configuration reference.
 
 - Vocabulary: "makeup" = "mac app".
 - Never edit `node_modules` (global/Homebrew/npm/git installs too). Updates overwrite. Skill notes go in `tools.md` or `AGENTS.md`.

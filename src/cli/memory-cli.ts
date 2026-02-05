@@ -3,11 +3,16 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { resolveDefaultAgentId } from "../agents/agent-scope.js";
+import {
+  resolveAgentConfig,
+  resolveAgentWorkspaceDir,
+  resolveDefaultAgentId,
+} from "../agents/agent-scope.js";
 import { loadConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
 import { resolveSessionTranscriptsDirForAgent } from "../config/sessions/paths.js";
 import { setVerbose } from "../globals.js";
+import { MemoryGitSyncManager } from "../memory/git-sync.js";
 import { getMemorySearchManager, type MemorySearchManagerResult } from "../memory/index.js";
 import { listMemoryFiles, normalizeExtraMemoryPaths } from "../memory/internal.js";
 import { defaultRuntime } from "../runtime.js";
@@ -706,6 +711,178 @@ export function registerMemoryCli(program: Command) {
             defaultRuntime.log(lines.join("\n").trim());
           },
         });
+      },
+    );
+
+  memory
+    .command("sync")
+    .description("Sync agent memory to/from git repository")
+    .option("--agent <id>", "Agent id (default: default agent)")
+    .option("--status", "Show sync status")
+    .option("--force", "Force sync (ignore conflicts)")
+    .option("--pull-only", "Only pull, don't push")
+    .option("--push-only", "Only push, don't pull")
+    .option("--init", "Initialize git repository")
+    .option("--verbose", "Verbose logging", false)
+    .action(
+      async (
+        opts: MemoryCommandOptions & {
+          status?: boolean;
+          pullOnly?: boolean;
+          pushOnly?: boolean;
+          init?: boolean;
+        },
+      ) => {
+        setVerbose(Boolean(opts.verbose));
+        const cfg = loadConfig();
+        const agentId = resolveAgent(cfg, opts.agent);
+
+        // Get git sync config
+        const agentConfig = resolveAgentConfig(cfg, agentId);
+        const gitSyncConfig = agentConfig?.memory?.gitSync ?? cfg.agents?.defaults?.memory?.gitSync;
+
+        if (!gitSyncConfig?.enabled && !opts.init) {
+          defaultRuntime.error("Git sync is not enabled for this agent.");
+          defaultRuntime.log("Enable it in config:");
+          defaultRuntime.log(
+            JSON.stringify(
+              {
+                agents: {
+                  defaults: {
+                    memory: {
+                      gitSync: {
+                        enabled: true,
+                        repository: "git@github.com:username/agent-memory.git",
+                      },
+                    },
+                  },
+                },
+              },
+              null,
+              2,
+            ),
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+
+        if (opts.init) {
+          const repository = gitSyncConfig?.repository;
+          if (!repository) {
+            defaultRuntime.error("Git sync repository not configured.");
+            process.exitCode = 1;
+            return;
+          }
+
+          const manager = new MemoryGitSyncManager(workspaceDir, {
+            enabled: true,
+            repository,
+            branch: gitSyncConfig?.branch || "main",
+            autoCommit: true,
+            autoPush: false,
+            autoPull: false,
+          });
+
+          try {
+            await manager.init();
+            defaultRuntime.log("Git repository initialized successfully.");
+            defaultRuntime.log(`Repository: ${repository}`);
+            defaultRuntime.log(`Branch: ${gitSyncConfig?.branch || "main"}`);
+          } catch (error) {
+            defaultRuntime.error(`Git init failed: ${formatErrorMessage(error)}`);
+            process.exitCode = 1;
+          }
+          return;
+        }
+
+        if (!gitSyncConfig) {
+          defaultRuntime.error("Git sync configuration not found.");
+          process.exitCode = 1;
+          return;
+        }
+
+        const manager = new MemoryGitSyncManager(workspaceDir, gitSyncConfig);
+
+        try {
+          // Initialize if needed
+          await manager.init();
+
+          if (opts.status) {
+            const hasChanges = await manager.hasChanges();
+            const changes = hasChanges ? await manager.getChangedFiles() : [];
+
+            const rich = isRich();
+            const heading = (text: string) => colorize(rich, theme.heading, text);
+            const muted = (text: string) => colorize(rich, theme.muted, text);
+            const info = (text: string) => colorize(rich, theme.info, text);
+            const warn = (text: string) => colorize(rich, theme.warn, text);
+            const label = (text: string) => muted(`${text}:`);
+
+            const lines = [
+              `${heading("Memory Git Sync")} ${muted(`(${agentId})`)}`,
+              `${label("Repository")} ${info(gitSyncConfig.repository)}`,
+              `${label("Branch")} ${info(gitSyncConfig.branch || "main")}`,
+              `${label("Pending Changes")} ${hasChanges ? warn(String(changes.length)) : muted("0")}`,
+            ];
+
+            if (changes.length > 0) {
+              lines.push(label("Files"));
+              for (const file of changes) {
+                lines.push(`  ${muted("-")} ${info(file)}`);
+              }
+            }
+
+            defaultRuntime.log(lines.join("\n"));
+            return;
+          }
+
+          // Perform sync
+          let result;
+
+          if (opts.pullOnly) {
+            result = await manager.pull();
+          } else if (opts.pushOnly) {
+            const hasChanges = await manager.hasChanges();
+            if (hasChanges) {
+              const commitResult = await manager.commit();
+              if (commitResult.success) {
+                result = await manager.push();
+              } else {
+                result = commitResult;
+              }
+            } else {
+              defaultRuntime.log("No changes to push.");
+              return;
+            }
+          } else {
+            result = await manager.sync();
+          }
+
+          if (result.success) {
+            const rich = isRich();
+            const success = (text: string) => colorize(rich, theme.success, text);
+            const muted = (text: string) => colorize(rich, theme.muted, text);
+
+            defaultRuntime.log(success("✓ Memory sync completed"));
+            if (result.pulled) {
+              defaultRuntime.log(muted("  - Pulled from remote"));
+            }
+            if (result.committed) {
+              defaultRuntime.log(muted(`  - Committed ${result.changes?.length || 0} files`));
+            }
+            if (result.pushed) {
+              defaultRuntime.log(muted("  - Pushed to remote"));
+            }
+          } else {
+            defaultRuntime.error(`✗ Memory sync failed: ${result.error}`);
+            process.exitCode = 1;
+          }
+        } catch (error) {
+          defaultRuntime.error(`Git sync failed: ${formatErrorMessage(error)}`);
+          process.exitCode = 1;
+        }
       },
     );
 }

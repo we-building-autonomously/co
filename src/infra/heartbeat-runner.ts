@@ -35,6 +35,7 @@ import {
   updateSessionStore,
 } from "../config/sessions.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import { MemoryGitSyncManager } from "../memory/git-sync.js";
 import { getQueueSize } from "../process/command-queue.js";
 import { CommandLane } from "../process/lanes.js";
 import { normalizeAgentId, toAgentStoreSessionKey } from "../routing/session-key.js";
@@ -510,6 +511,30 @@ export async function runHeartbeatOnce(opts: {
     return { status: "skipped", reason: "requests-in-flight" };
   }
 
+  // Pre-heartbeat: Git sync (pull)
+  const agentConfig = resolveAgentConfig(cfg, agentId);
+  const gitSyncConfig = agentConfig?.memory?.gitSync ?? cfg.agents?.defaults?.memory?.gitSync;
+  let gitSyncManager: MemoryGitSyncManager | null = null;
+
+  if (gitSyncConfig?.enabled && gitSyncConfig.onHeartbeat !== false) {
+    const workspaceDirForGit = resolveAgentWorkspaceDir(cfg, agentId);
+    gitSyncManager = new MemoryGitSyncManager(workspaceDirForGit, gitSyncConfig);
+
+    try {
+      // Initialize git repo if needed
+      await gitSyncManager.init();
+
+      // Pre-heartbeat: Pull changes
+      const pullResult = await gitSyncManager.pull();
+      if (!pullResult.success) {
+        log.warn("Git sync pull failed", { error: pullResult.error });
+      }
+    } catch (error) {
+      log.error("Git sync pre-heartbeat failed", { error });
+      // Don't block heartbeat on sync failure
+    }
+  }
+
   // Skip heartbeat if HEARTBEAT.md exists but has no actionable content.
   // This saves API calls/costs when the file is effectively empty (only comments/headers).
   // EXCEPTION: Don't skip for exec events - they have pending system events to process.
@@ -811,6 +836,26 @@ export async function runHeartbeatOnce(opts: {
           lastHeartbeatSentAt: startedAt,
         };
         await saveSessionStore(storePath, store);
+      }
+    }
+
+    // Post-heartbeat: Git sync (commit and push if changed)
+    if (gitSyncManager) {
+      try {
+        const hasChanges = await gitSyncManager.hasChanges();
+        if (hasChanges) {
+          const commitResult = await gitSyncManager.commit();
+          if (commitResult.success && commitResult.committed) {
+            await gitSyncManager.push();
+            log.info("Git sync completed after heartbeat", {
+              committed: commitResult.committed,
+              files: commitResult.changes?.length,
+            });
+          }
+        }
+      } catch (error) {
+        log.error("Git sync post-heartbeat failed", { error });
+        // Don't fail heartbeat if sync fails
       }
     }
 
