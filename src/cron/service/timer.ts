@@ -135,7 +135,7 @@ export async function executeJob(
         return;
       }
       const cronMessage = `its an automated reminder from the user about ${text}`;
-      state.deps.enqueueSystemEvent(cronMessage, { agentId: job.agentId });
+      state.deps.enqueueUserMessage(cronMessage, { agentId: job.agentId });
       if (job.wakeMode === "now" && state.deps.runHeartbeatOnce) {
         const reason = `cron:${job.id}`;
         const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -195,7 +195,7 @@ export async function executeJob(
         res.status === "error"
           ? `its an automated reminder from the user about ${summaryText} (error occurred)`
           : `its an automated reminder from the user about ${summaryText}`;
-      state.deps.enqueueSystemEvent(label, { agentId: job.agentId });
+      state.deps.enqueueUserMessage(label, { agentId: job.agentId });
       if (job.wakeMode === "now") {
         state.deps.requestHeartbeatNow({ reason: `cron:${job.id}` });
       }
@@ -228,7 +228,7 @@ export function wake(
     return { ok: false } as const;
   }
   const wakeMessage = `its an automated reminder from the user about ${text}`;
-  state.deps.enqueueSystemEvent(wakeMessage);
+  state.deps.enqueueUserMessage(wakeMessage);
   if (opts.mode === "now") {
     state.deps.requestHeartbeatNow({ reason: "wake" });
   }

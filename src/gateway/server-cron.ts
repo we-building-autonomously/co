@@ -9,6 +9,7 @@ import { resolveCronStorePath } from "../cron/store.js";
 import { runHeartbeatOnce } from "../infra/heartbeat-runner.js";
 import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
 import { enqueueSystemEvent } from "../infra/system-events.js";
+import { enqueueUserMessage } from "../infra/user-messages.js";
 import { getChildLogger } from "../logging.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
@@ -53,6 +54,14 @@ export function buildGatewayCronService(params: {
         agentId,
       });
       enqueueSystemEvent(text, { sessionKey });
+    },
+    enqueueUserMessage: (text, opts) => {
+      const { agentId, cfg: runtimeConfig } = resolveCronAgent(opts?.agentId);
+      const sessionKey = resolveAgentMainSessionKey({
+        cfg: runtimeConfig,
+        agentId,
+      });
+      enqueueUserMessage(text, { sessionKey });
     },
     requestHeartbeatNow,
     runHeartbeatOnce: async (opts) => {

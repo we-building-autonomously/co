@@ -7,6 +7,7 @@ import { type SessionEntry, updateSessionStore } from "../../config/sessions.js"
 import { buildChannelSummary } from "../../infra/channel-summary.js";
 import { getRemoteSkillEligibility } from "../../infra/skills-remote.js";
 import { drainSystemEventEntries } from "../../infra/system-events.js";
+import { drainUserMessageEntries } from "../../infra/user-messages.js";
 
 export async function prependSystemEvents(params: {
   cfg: OpenClawConfig;
@@ -143,12 +144,33 @@ export async function prependSystemEvents(params: {
       systemLines.unshift(...summary);
     }
   }
-  if (systemLines.length === 0) {
+
+  // Drain user messages (from cron, etc.) - these appear as user messages, not system
+  const userMessages = drainUserMessageEntries(params.sessionKey);
+  const userMessageLines = userMessages
+    .map((msg) => {
+      const compacted = compactSystemEvent(msg.text);
+      if (!compacted) {
+        return null;
+      }
+      return `[${formatSystemEventTimestamp(msg.ts, params.cfg)}] ${compacted}`;
+    })
+    .filter((v): v is string => Boolean(v));
+
+  // Build the final prefix
+  const blocks: string[] = [];
+  if (systemLines.length > 0) {
+    blocks.push(systemLines.map((l) => `System: ${l}`).join("\n"));
+  }
+  if (userMessageLines.length > 0) {
+    blocks.push(userMessageLines.join("\n"));
+  }
+
+  if (blocks.length === 0) {
     return params.prefixedBodyBase;
   }
 
-  const block = systemLines.map((l) => `System: ${l}`).join("\n");
-  return `${block}\n\n${params.prefixedBodyBase}`;
+  return `${blocks.join("\n\n")}\n\n${params.prefixedBodyBase}`;
 }
 
 export async function ensureSkillSnapshot(params: {
