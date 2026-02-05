@@ -8,6 +8,7 @@ import { createBrowserTool } from "./tools/browser-tool.js";
 import { createCanvasTool } from "./tools/canvas-tool.js";
 import { createCronTool } from "./tools/cron-tool.js";
 import { createGatewayTool } from "./tools/gateway-tool.js";
+import { createGithubTool } from "./tools/github-tool.js";
 import { createImageTool } from "./tools/image-tool.js";
 import { createMessageTool } from "./tools/message-tool.js";
 import { createNodesTool } from "./tools/nodes-tool.js";
@@ -102,6 +103,9 @@ export function createOpenClawTools(options?: {
     }),
     createCronTool({
       agentSessionKey: options?.agentSessionKey,
+    }),
+    createGithubTool({
+      config: options?.config,
     }),
     ...(messageTool ? [messageTool] : []),
     createTtsTool({

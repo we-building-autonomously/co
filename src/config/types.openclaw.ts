@@ -11,6 +11,7 @@ import type {
   GatewayConfig,
   TalkConfig,
 } from "./types.gateway.js";
+import type { GitHubConfig } from "./types.github.js";
 import type { HooksConfig } from "./types.hooks.js";
 import type { MemoryConfig } from "./types.memory.js";
 import type {
@@ -97,6 +98,7 @@ export type OpenClawConfig = {
   talk?: TalkConfig;
   gateway?: GatewayConfig;
   memory?: MemoryConfig;
+  github?: GitHubConfig;
 };
 
 export type ConfigValidationIssue = {
