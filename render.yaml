@@ -1,6 +1,7 @@
 services:
   - type: web
-    name: co
+    name: project-co
+    id: agent_gateway
     runtime: docker
     plan: standard
     healthCheckPath: /health
